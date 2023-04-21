@@ -4,6 +4,9 @@ import numpy as np
 import tomesd
 import torch
 
+from einops import rearrange
+
+
 from diffusers import StableDiffusionInstructPix2PixPipeline, StableDiffusionControlNetPipeline, ControlNetModel, UNet2DConditionModel
 from diffusers.schedulers import EulerAncestralDiscreteScheduler, DDIMScheduler
 from text_to_video_pipeline import TextToVideoPipeline
@@ -76,6 +79,9 @@ class Model:
             kwargs['video_length'] = len(frame_ids)
         if self.model_type == ModelType.Text2Video:
             kwargs["frame_ids"] = frame_ids
+
+        print(self.pipe)
+        print(type(kwargs['image']))
         return self.pipe(prompt=prompt[frame_ids].tolist(),
                          negative_prompt=negative_prompt[frame_ids].tolist(),
                          latents=latents,
@@ -164,13 +170,13 @@ class Model:
         added_prompt = 'best quality, extremely detailed'
         negative_prompts = 'longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality'
 
-        video, fps = utils.prepare_video(
+        video, fps = utils.prepare_image(
             video_path, resolution, self.device, self.dtype, False)
         control = utils.pre_process_canny(
-            video, low_threshold, high_threshold).to(self.device).to(self.dtype)
+            video, low_threshold+30, high_threshold).to(self.device).to(self.dtype)
 
-        # canny_to_save = list(rearrange(control, 'f c w h -> f w h c').cpu().detach().numpy())
-        # _ = utils.create_video(canny_to_save, 4, path="ddxk.mp4", watermark=None)
+        canny_to_save = list(rearrange(control, 'f c w h -> f w h c').cpu().detach().numpy())
+        _ = utils.create_video(canny_to_save, 4, path="deer_pic.mp4", watermark=None)
 
         f, _, h, w = video.shape
         self.generator.manual_seed(seed)
@@ -490,6 +496,76 @@ class Model:
                                 negative_prompt=negative_prompt,
                                 merging_ratio=merging_ratio,
                                 split_to_chunks=True,
-                                chunk_size=chunk_size,
+                                chunk_size=2,
                                 )
-        return utils.create_video(result, fps, path=path, watermark=gradio_utils.logo_name_to_path(watermark))
+        return utils.create_video(result, fps, path=path, watermark=None)
+
+    def process_text2video_with_draw(self,
+                           prompt,
+                           model_name="dreamlike-art/dreamlike-photoreal-2.0",
+                           motion_field_strength_x=12,
+                           motion_field_strength_y=12,
+                           t0=44,
+                           t1=47,
+                           n_prompt="",
+                           chunk_size=8,
+                           video_length=8,
+                           watermark='Picsart AI Research',
+                           merging_ratio=0.0,
+                           seed=0,
+                           resolution=512,
+                           fps=2,
+                           use_cf_attn=True,
+                           use_motion_field=True,
+                           smooth_bg=False,
+                           smooth_bg_strength=0.4,
+                           path=None):
+        print("Module Text2Video")
+        if self.model_type != ModelType.Text2Video or model_name != self.model_name:
+            print("Model update")
+            unet = UNet2DConditionModel.from_pretrained(
+                model_name, subfolder="unet")
+            self.set_model(ModelType.Text2Video,
+                           model_id=model_name, unet=unet)
+            self.pipe.scheduler = DDIMScheduler.from_config(
+                self.pipe.scheduler.config)
+            if use_cf_attn:
+                self.pipe.unet.set_attn_processor(
+                    processor=self.text2video_attn_proc)
+        self.generator.manual_seed(seed)
+
+        added_prompt = "high quality, HD, 8K, trending on artstation, high focus, dramatic lighting"
+        negative_prompts = 'longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer difits, cropped, worst quality, low quality, deformed body, bloated, ugly, unrealistic'
+
+        prompt = prompt.rstrip()
+        if len(prompt) > 0 and (prompt[-1] == "," or prompt[-1] == "."):
+            prompt = prompt.rstrip()[:-1]
+        prompt = prompt.rstrip()
+        prompt = prompt + ", "+added_prompt
+        if len(n_prompt) > 0:
+            negative_prompt = n_prompt
+        else:
+            negative_prompt = None
+
+        result = self.inference(prompt=prompt,
+                                video_length=video_length,
+                                height=resolution,
+                                width=resolution,
+                                num_inference_steps=50,
+                                guidance_scale=7.5,
+                                guidance_stop_step=1.0,
+                                t0=t0,
+                                t1=t1,
+                                motion_field_strength_x=motion_field_strength_x,
+                                motion_field_strength_y=motion_field_strength_y,
+                                use_motion_field=use_motion_field,
+                                smooth_bg=smooth_bg,
+                                smooth_bg_strength=smooth_bg_strength,
+                                seed=seed,
+                                output_type='numpy',
+                                negative_prompt=negative_prompt,
+                                merging_ratio=merging_ratio,
+                                split_to_chunks=True,
+                                chunk_size=2,
+                                )
+        return utils.create_video(result, fps, path=path, watermark=None)

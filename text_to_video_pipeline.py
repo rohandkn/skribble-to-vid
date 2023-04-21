@@ -252,6 +252,8 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         t1: int = 47,
         **kwargs,
     ):
+        print("IN 255")
+        print(kwargs)
         frame_ids = kwargs.pop("frame_ids", list(range(video_length)))
         assert t0 < t1
         assert num_videos_per_prompt == 1
