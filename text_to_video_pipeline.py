@@ -160,9 +160,15 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                     print("GENERATING FROM UNET")
                     noise_pred = self.unet(
                         latent_model_input, t, encoder_hidden_states=te).sample.to(dtype=latents_dtype)
-                    print(self.controlnet.device)
-                    print(self.condition.device)
-                    print(latent_model_input.device)
+                    print(latent_model_input.type())
+                    print(te.type())
+                    latent_model_input = latent_model_input.type(torch.cuda.FloatTensor)
+                    te = te.type(torch.cuda.FloatTensor)
+                    print(latent_model_input.type())
+                    print(te.type())
+                    self.condition = self.condition.type(torch.cuda.FloatTensor)
+
+
                     noise_pred = self.controlnet(
                         latent_model_input, t, encoder_hidden_states=te, controlnet_cond=self.condition).sample.to(dtype=latents_dtype)
 
