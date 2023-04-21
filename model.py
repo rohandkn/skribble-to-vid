@@ -499,7 +499,7 @@ class Model:
         return utils.create_video(result, fps, path=path, watermark=None)
 
     def process_text2video_with_draw(self,
-                           video,
+                           video_path,
                            prompt,
                            model_name="dreamlike-art/dreamlike-photoreal-2.0",
                            motion_field_strength_x=12,
@@ -524,8 +524,20 @@ class Model:
             print("Model update")
             unet = UNet2DConditionModel.from_pretrained(
                 model_name, subfolder="unet")
+            controlnet = ControlNetModel.from_pretrained(
+                "lllyasviel/sd-controlnet-canny")
+            controlnet.cuda()
+            
+            video, fps = utils.prepare_image(
+            video_path, resolution, self.device, self.dtype, False)
+            control = utils.pre_process_canny(
+            video, 100, 200).to(self.device).to(self.dtype)
+
+            canny_to_save = list(rearrange(control, 'f c w h -> f w h c').cpu().detach().numpy())
+            _ = utils.create_video(canny_to_save, 4, path="deer_pic.mp4", watermark=None)
+
             self.set_model(ModelType.Text2Video,
-                           model_id=model_name, unet=unet)
+                           model_id=model_name, unet=unet, controlnet=controlnet, condition=control)
             self.pipe.scheduler = DDIMScheduler.from_config(
                 self.pipe.scheduler.config)
             if use_cf_attn:
@@ -566,5 +578,6 @@ class Model:
                                 merging_ratio=merging_ratio,
                                 split_to_chunks=True,
                                 chunk_size=2,
+                                control=control
                                 )
         return utils.create_video(result, fps, path=path, watermark=None)

@@ -43,9 +43,15 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         safety_checker: StableDiffusionSafetyChecker,
         feature_extractor: CLIPFeatureExtractor,
         requires_safety_checker: bool = True,
+        controlnet = None,
+        condition = None
     ):
+        self.controlnet = controlnet
+        self.condition = condition
         super().__init__(vae, text_encoder, tokenizer, unet, scheduler,
                          safety_checker, feature_extractor, requires_safety_checker)
+
+
 
     def DDPM_forward(self, x0, t0, tMax, generator, device, shape, text_embeddings):
         rand_device = "cpu" if device.type == "mps" else device
@@ -75,6 +81,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
 
             if isinstance(generator, list):
                 shape = (1,) + shape[1:]
+                print("IN GEN LATENT ISINSTANCE")
                 latents = [
                     torch.randn(
                         shape, generator=generator[i], device=rand_device, dtype=dtype)
@@ -82,6 +89,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                 ]
                 latents = torch.cat(latents, dim=0).to(device)
             else:
+                print("IN GEN LATENT ELSE")
                 latents = torch.randn(
                     shape, generator=generator, device=rand_device, dtype=dtype).to(device)
         else:
@@ -149,8 +157,14 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                         text_embeddings[0] = null_embs[i][0]
                     te = torch.cat([repeat(text_embeddings[0, :, :], "c k -> f c k", f=f),
                                    repeat(text_embeddings[1, :, :], "c k -> f c k", f=f)])
+                    print("GENERATING FROM UNET")
                     noise_pred = self.unet(
                         latent_model_input, t, encoder_hidden_states=te).sample.to(dtype=latents_dtype)
+                    print(self.controlnet.device)
+                    print(self.condition.device)
+                    print(latent_model_input.device)
+                    noise_pred = self.controlnet(
+                        latent_model_input, t, encoder_hidden_states=te, controlnet_cond=self.condition).sample.to(dtype=latents_dtype)
 
                 # perform guidance
                 if do_classifier_free_guidance:
