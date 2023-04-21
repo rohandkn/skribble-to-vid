@@ -80,8 +80,6 @@ class Model:
         if self.model_type == ModelType.Text2Video:
             kwargs["frame_ids"] = frame_ids
 
-        print(self.pipe)
-        print(type(kwargs['image']))
         return self.pipe(prompt=prompt[frame_ids].tolist(),
                          negative_prompt=negative_prompt[frame_ids].tolist(),
                          latents=latents,
@@ -173,7 +171,7 @@ class Model:
         video, fps = utils.prepare_image(
             video_path, resolution, self.device, self.dtype, False)
         control = utils.pre_process_canny(
-            video, low_threshold+30, high_threshold).to(self.device).to(self.dtype)
+            video, low_threshold, high_threshold).to(self.device).to(self.dtype)
 
         canny_to_save = list(rearrange(control, 'f c w h -> f w h c').cpu().detach().numpy())
         _ = utils.create_video(canny_to_save, 4, path="deer_pic.mp4", watermark=None)
@@ -501,6 +499,7 @@ class Model:
         return utils.create_video(result, fps, path=path, watermark=None)
 
     def process_text2video_with_draw(self,
+                           video,
                            prompt,
                            model_name="dreamlike-art/dreamlike-photoreal-2.0",
                            motion_field_strength_x=12,
