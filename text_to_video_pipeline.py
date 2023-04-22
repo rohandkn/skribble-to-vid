@@ -158,20 +158,28 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                     te = torch.cat([repeat(text_embeddings[0, :, :], "c k -> f c k", f=f),
                                    repeat(text_embeddings[1, :, :], "c k -> f c k", f=f)])
                     print("GENERATING FROM UNET")
-                    noise_pred = self.unet(
-                        latent_model_input, t, encoder_hidden_states=te).sample.to(dtype=latents_dtype)
-                    print(latent_model_input.type())
-                    print(te.type())
+                    print("input into unet is ")
+                    print(latent_model_input.shape)
                     latent_model_input = latent_model_input.type(torch.cuda.FloatTensor)
                     te = te.type(torch.cuda.FloatTensor)
-                    print(latent_model_input.type())
-                    print(te.type())
                     self.condition = self.condition.type(torch.cuda.FloatTensor)
-
-
-                    noise_pred = self.controlnet(
-                        latent_model_input, t, encoder_hidden_states=te, controlnet_cond=self.condition).sample.to(dtype=latents_dtype)
-
+                    print("input into controlnet is ")
+                    print(latent_model_input.shape)
+                    print(self.condition.shape)
+                    samples = self.controlnet(
+                        latent_model_input, t, encoder_hidden_states=te, controlnet_cond=self.condition)
+                    print("output from controlnet is ")
+                    latent_model_input = latent_model_input.type(torch.cuda.HalfTensor)
+                    te = te.type(torch.cuda.HalfTensor)
+                    self.condition = self.condition.type(torch.cuda.HalfTensor)
+                    print(t)
+                    if t<3:
+                        samples.down_block_res_samples = None
+                        samples.mid_block_res_sample = None
+                    noise_pred = self.unet(
+                        latent_model_input, t, encoder_hidden_states=te,
+                        down_block_additional_residuals=samples.down_block_res_samples,
+                        mid_block_additional_residual=samples.mid_block_res_sample).sample.to(dtype=latents_dtype)
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(

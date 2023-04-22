@@ -580,4 +580,5 @@ class Model:
                                 chunk_size=2,
                                 control=control
                                 )
+        fps = 1
         return utils.create_video(result, fps, path=path, watermark=None)
