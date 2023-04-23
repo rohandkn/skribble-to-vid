@@ -123,11 +123,11 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         return warped
 
     def DDIM_backward(self, frame_ids, debug_num, num_inference_steps, timesteps, skip_t, t0, t1, do_classifier_free_guidance, null_embs, text_embeddings, latents_local,
-                      latents_dtype, guidance_scale, guidance_stop_step, callback, callback_steps, extra_step_kwargs, num_warmup_steps):
+                      latents_dtype, guidance_scale, opt_prompt, guidance_stop_step, callback, callback_steps, extra_step_kwargs, num_warmup_steps):
         entered = False
         print("DDIM entered")
         f = latents_local.shape[2]
-
+       
         latents_local = rearrange(latents_local, "b c f w h -> (b f) c w h")
 
         latents = latents_local.detach().clone()
@@ -153,6 +153,8 @@ class TextToVideoPipeline(StableDiffusionPipeline):
 
                 # predict the noise residual
                 with torch.no_grad():
+                    if debug_num != 1:
+                        text_embeddings = opt_prompt
                     if null_embs is not None:
                         text_embeddings[0] = null_embs[i][0]
                     te = torch.cat([repeat(text_embeddings[0, :, :], "c k -> f c k", f=f),
@@ -321,6 +323,11 @@ class TextToVideoPipeline(StableDiffusionPipeline):
             prompt, device, num_videos_per_prompt, do_classifier_free_guidance, negative_prompt
         )
 
+        text_embeddings2 = self._encode_prompt(
+          "baseball hat", device, num_videos_per_prompt, do_classifier_free_guidance, negative_prompt
+        )
+        print(prompt)
+
         # Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)
         timesteps = self.scheduler.timesteps
@@ -386,7 +393,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         print("KEY BG CALL")
         print(xT.shape)
         ddim_res = self.DDIM_backward(frame_ids=frame_ids, debug_num=1, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=1000, t0=t0, t1=t1, do_classifier_free_guidance=do_classifier_free_guidance,
-                                      null_embs=null_embs, text_embeddings=text_embeddings, latents_local=xT, latents_dtype=dtype, guidance_scale=guidance_scale, guidance_stop_step=guidance_stop_step,
+                                      opt_prompt=text_embeddings2, null_embs=null_embs, text_embeddings=text_embeddings, latents_local=xT, latents_dtype=dtype, guidance_scale=guidance_scale, guidance_stop_step=guidance_stop_step,
                                       callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
 
         x0 = ddim_res["x0"].detach()
@@ -427,7 +434,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
             print("before last shape")
             print(x_t1.shape)
             ddim_res = self.DDIM_backward(frame_ids=frame_ids, debug_num=2, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=t1, t0=-1, t1=-1, do_classifier_free_guidance=do_classifier_free_guidance,
-                                          null_embs=null_embs, text_embeddings=text_embeddings, latents_local=x_t1, latents_dtype=dtype, guidance_scale=guidance_scale,
+                                          null_embs=null_embs, opt_prompt=text_embeddings2, text_embeddings=text_embeddings, latents_local=x_t1, latents_dtype=dtype, guidance_scale=guidance_scale,
                                           guidance_stop_step=guidance_stop_step, callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
 
             x0 = ddim_res["x0"].detach()
