@@ -166,7 +166,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                     te = te.type(torch.cuda.HalfTensor)
                     self.condition = self.condition.type(torch.cuda.HalfTensor)
                     print("TIME: "+str(t.item()))
-                    if debug_num == 5:
+                    if debug_num != 1:
                         print("NOT FIRST!")
                         samples.down_block_res_samples = None
                         samples.mid_block_res_sample = None

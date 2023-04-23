@@ -548,7 +548,9 @@ class Model:
                            model_id=model_name, unet=unet, controlnet=controlnet, condition=control)
             self.pipe.scheduler = DDIMScheduler.from_config(
                 self.pipe.scheduler.config)
-            if use_cf_attn:
+            if use_cf_attn and False:
+                self.pipe.controlnet.set_attn_processor(
+                    processor=self.text2video_attn_proc)
                 self.pipe.unet.set_attn_processor(
                     processor=self.text2video_attn_proc)
         self.generator.manual_seed(seed)
