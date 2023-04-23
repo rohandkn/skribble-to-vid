@@ -593,3 +593,68 @@ class Model:
         fps = 1
         print(result.shape)
         return utils.create_video(result, fps, path=path, watermark=None)
+    
+    def process_controlnet_canny(self,
+                                 video_path,
+                                 prompt,
+                                 chunk_size=8,
+                                 watermark='Picsart AI Research',
+                                 merging_ratio=0.0,
+                                 num_inference_steps=20,
+                                 controlnet_conditioning_scale=1.0,
+                                 guidance_scale=9.0,
+                                 seed=42,
+                                 eta=0.0,
+                                 low_threshold=100,
+                                 high_threshold=200,
+                                 resolution=512,
+                                 use_cf_attn=True,
+                                 save_path=None):
+        print("Module Canny")
+        video_path = gradio_utils.edge_path_to_video_path(video_path)
+        if self.model_type != ModelType.ControlNetCanny:
+            controlnet = ControlNetModel.from_pretrained(
+                "lllyasviel/sd-controlnet-canny")
+            self.set_model(ModelType.ControlNetCanny,
+                           model_id="runwayml/stable-diffusion-v1-5", controlnet=controlnet)
+            self.pipe.scheduler = DDIMScheduler.from_config(
+                self.pipe.scheduler.config)
+            if use_cf_attn:
+                self.pipe.unet.set_attn_processor(
+                    processor=self.controlnet_attn_proc)
+                self.pipe.controlnet.set_attn_processor(
+                    processor=self.controlnet_attn_proc)
+
+        added_prompt = 'best quality, extremely detailed'
+        negative_prompts = 'longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality'
+
+        video, fps = utils.prepare_image(
+            video_path, resolution, self.device, self.dtype, False)
+        control = utils.pre_process_canny(
+            video, low_threshold, high_threshold).to(self.device).to(self.dtype)
+
+        canny_to_save = list(rearrange(control, 'f c w h -> f w h c').cpu().detach().numpy())
+        _ = utils.create_video(canny_to_save, 4, path="deer_pic.mp4", watermark=None)
+
+        f, _, h, w = video.shape
+        self.generator.manual_seed(seed)
+        latents = torch.randn((1, 4, h//8, w//8), dtype=self.dtype,
+                              device=self.device, generator=self.generator)
+        latents = latents.repeat(f, 1, 1, 1)
+        result = self.inference(image=control,
+                                prompt=prompt + ', ' + added_prompt,
+                                height=h,
+                                width=w,
+                                negative_prompt=negative_prompts,
+                                num_inference_steps=num_inference_steps,
+                                guidance_scale=guidance_scale,
+                                controlnet_conditioning_scale=controlnet_conditioning_scale,
+                                eta=eta,
+                                latents=latents,
+                                seed=seed,
+                                output_type='numpy',
+                                split_to_chunks=True,
+                                chunk_size=chunk_size,
+                                merging_ratio=merging_ratio,
+                                )
+        return utils.create_video(result, fps, path=save_path, watermark=gradio_utils.logo_name_to_path(watermark))
