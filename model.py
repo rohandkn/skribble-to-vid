@@ -128,12 +128,15 @@ class Model:
                 print(f'Processing chunk {i + 1} / {len(chunk_ids)}')
                 result.append(self.inference_chunk(frame_ids=frame_ids,
                                                    prompt=prompt,
-                                                   negative_prompt=negative_prompt,
+                                                 negative_prompt=negative_prompt,
                                                    **kwargs).images[1:])
+                print(result[0].shape)
                 frames_counter += len(chunk_ids)-1
                 if on_huggingspace and frames_counter >= 80:
                     break
             result = np.concatenate(result)
+            print("shape in inference")
+            print(result.shape)
             return result
         else:
             self.generator.manual_seed(seed)
@@ -586,4 +589,5 @@ class Model:
                                 control=control
                                 )
         fps = 1
+        print(result.shape)
         return utils.create_video(result, fps, path=path, watermark=None)

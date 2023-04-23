@@ -166,7 +166,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                     te = te.type(torch.cuda.HalfTensor)
                     self.condition = self.condition.type(torch.cuda.HalfTensor)
                     print("TIME: "+str(t.item()))
-                    if debug_num != 1:
+                    if debug_num == 5:
                         print("NOT FIRST!")
                         samples.down_block_res_samples = None
                         samples.mid_block_res_sample = None
@@ -214,12 +214,14 @@ class TextToVideoPipeline(StableDiffusionPipeline):
 
     def decode_latents(self, latents):
         video_length = latents.shape[2]
+        print(video_length)
         latents = 1 / 0.18215 * latents
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
         video = self.vae.decode(latents).sample
         video = rearrange(video, "(b f) c h w -> b c f h w", f=video_length)
         video = (video / 2 + 0.5).clamp(0, 1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloa16
+        print(video.shape)
         video = video.detach().cpu()
         return video
 
@@ -390,8 +392,10 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         x0 = ddim_res["x0"].detach()
 
         if "x_t0_1" in ddim_res:
+            print("got t0")
             x_t0_1 = ddim_res["x_t0_1"].detach()
         if "x_t1_1" in ddim_res:
+            print("got t1")
             x_t1_1 = ddim_res["x_t1_1"].detach()
         del ddim_res
         del xT
@@ -400,27 +404,35 @@ class TextToVideoPipeline(StableDiffusionPipeline):
             del x0
 
             x_t0_k = x_t0_1[:, :, :1, :, :].repeat(1, 1, video_length-1, 1, 1)
-
+            print("b4 ref flow")
+            print(x_t0_k.shape)
             reference_flow, x_t0_k = self.create_motion_field_and_warp_latents(
                 motion_field_strength_x=motion_field_strength_x, motion_field_strength_y=motion_field_strength_y, latents=x_t0_k, video_length=video_length, frame_ids=frame_ids[1:])
-
+            print(x_t0_k.shape)
             # assuming t0=t1=1000, if t0 = 1000
             if t1 > t0:
                 x_t1_k = self.DDPM_forward(
                     x0=x_t0_k, t0=t0, tMax=t1, device=device, shape=shape, text_embeddings=text_embeddings, generator=generator)
+
+                print(x_t1_k.shape)
             else:
                 x_t1_k = x_t0_k
+                print("else")
+                print(x_t1_k.shape)
 
             if x_t1_1 is None:
                 raise Exception
 
             x_t1 = torch.cat([x_t1_1, x_t1_k], dim=2).clone().detach()
+            print("before last shape")
             print(x_t1.shape)
             ddim_res = self.DDIM_backward(frame_ids=frame_ids, debug_num=2, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=t1, t0=-1, t1=-1, do_classifier_free_guidance=do_classifier_free_guidance,
                                           null_embs=null_embs, text_embeddings=text_embeddings, latents_local=x_t1, latents_dtype=dtype, guidance_scale=guidance_scale,
                                           guidance_stop_step=guidance_stop_step, callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
 
             x0 = ddim_res["x0"].detach()
+            print('got x0 shape')
+            print(x0.shape)
             del ddim_res
             del x_t1
             del x_t1_1
@@ -502,6 +514,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                                           null_embs=null_embs, text_embeddings=text_embeddings, latents_local=latents, latents_dtype=dtype, guidance_scale=guidance_scale,
                                           guidance_stop_step=guidance_stop_step, callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
             x0 = ddim_res["x0"].detach()
+            print("final shape!")
             del ddim_res
             del latents
 
