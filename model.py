@@ -72,6 +72,7 @@ class Model:
         negative_prompt = np.array(kwargs.pop('negative_prompt', ''))
         latents = None
         if 'latents' in kwargs:
+            print("FOUND latents!!!!")
             latents = kwargs.pop('latents')[frame_ids]
         if 'image' in kwargs:
             kwargs['image'] = kwargs['image'][frame_ids]
@@ -80,6 +81,10 @@ class Model:
         if self.model_type == ModelType.Text2Video:
             kwargs["frame_ids"] = frame_ids
 
+        print("frameids:!!!")
+        print(frame_ids)
+        print(prompt)
+        print(prompt[frame_ids])
         return self.pipe(prompt=prompt[frame_ids].tolist(),
                          negative_prompt=negative_prompt[frame_ids].tolist(),
                          latents=latents,

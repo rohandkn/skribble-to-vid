@@ -125,7 +125,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
     def DDIM_backward(self, num_inference_steps, timesteps, skip_t, t0, t1, do_classifier_free_guidance, null_embs, text_embeddings, latents_local,
                       latents_dtype, guidance_scale, guidance_stop_step, callback, callback_steps, extra_step_kwargs, num_warmup_steps):
         entered = False
-
+        print("DDIM entered")
         f = latents_local.shape[2]
 
         latents_local = rearrange(latents_local, "b c f w h -> (b f) c w h")
@@ -157,23 +157,16 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                         text_embeddings[0] = null_embs[i][0]
                     te = torch.cat([repeat(text_embeddings[0, :, :], "c k -> f c k", f=f),
                                    repeat(text_embeddings[1, :, :], "c k -> f c k", f=f)])
-                    print("GENERATING FROM UNET")
-                    print("input into unet is ")
-                    print(latent_model_input.shape)
                     latent_model_input = latent_model_input.type(torch.cuda.FloatTensor)
                     te = te.type(torch.cuda.FloatTensor)
                     self.condition = self.condition.type(torch.cuda.FloatTensor)
-                    print("input into controlnet is ")
-                    print(latent_model_input.shape)
-                    print(self.condition.shape)
                     samples = self.controlnet(
                         latent_model_input, t, encoder_hidden_states=te, controlnet_cond=self.condition)
-                    print("output from controlnet is ")
                     latent_model_input = latent_model_input.type(torch.cuda.HalfTensor)
                     te = te.type(torch.cuda.HalfTensor)
                     self.condition = self.condition.type(torch.cuda.HalfTensor)
-                    print(t)
-                    if t<3:
+                    print("TIME: "+str(t.item()))
+                    if t.item() != 1:
                         samples.down_block_res_samples = None
                         samples.mid_block_res_sample = None
                     noise_pred = self.unet(
@@ -282,7 +275,9 @@ class TextToVideoPipeline(StableDiffusionPipeline):
     ):
         print("IN 255")
         print(kwargs)
+        print(prompt)
         frame_ids = kwargs.pop("frame_ids", list(range(video_length)))
+        print(frame_ids)
         assert t0 < t1
         assert num_videos_per_prompt == 1
         assert isinstance(prompt, list) and len(prompt) > 0
