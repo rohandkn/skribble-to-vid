@@ -582,7 +582,7 @@ class Model:
                                 negative_prompt=negative_prompt,
                                 merging_ratio=merging_ratio,
                                 split_to_chunks=True,
-                                chunk_size=2,
+                                chunk_size=3,
                                 control=control
                                 )
         fps = 1

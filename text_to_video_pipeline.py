@@ -122,7 +122,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         warped = rearrange(warped, '(b f) c h w -> b c f h w', f=f)
         return warped
 
-    def DDIM_backward(self, frame_ids, num_inference_steps, timesteps, skip_t, t0, t1, do_classifier_free_guidance, null_embs, text_embeddings, latents_local,
+    def DDIM_backward(self, frame_ids, debug_num, num_inference_steps, timesteps, skip_t, t0, t1, do_classifier_free_guidance, null_embs, text_embeddings, latents_local,
                       latents_dtype, guidance_scale, guidance_stop_step, callback, callback_steps, extra_step_kwargs, num_warmup_steps):
         entered = False
         print("DDIM entered")
@@ -166,7 +166,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                     te = te.type(torch.cuda.HalfTensor)
                     self.condition = self.condition.type(torch.cuda.HalfTensor)
                     print("TIME: "+str(t.item()))
-                    if frame_ids != [0, 0]:
+                    if debug_num != 1:
                         print("NOT FIRST!")
                         samples.down_block_res_samples = None
                         samples.mid_block_res_sample = None
@@ -274,6 +274,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         t1: int = 47,
         **kwargs,
     ):
+        print(smooth_bg)
         print("IN 255")
         print(kwargs)
         print(prompt)
@@ -380,8 +381,9 @@ class TextToVideoPipeline(StableDiffusionPipeline):
 
         shape = (batch_size, num_channels_latents, 1, height //
                  self.vae_scale_factor, width // self.vae_scale_factor)
-
-        ddim_res = self.DDIM_backward(frame_ids=frame_ids, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=1000, t0=t0, t1=t1, do_classifier_free_guidance=do_classifier_free_guidance,
+        print("KEY BG CALL")
+        print(xT.shape)
+        ddim_res = self.DDIM_backward(frame_ids=frame_ids, debug_num=1, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=1000, t0=t0, t1=t1, do_classifier_free_guidance=do_classifier_free_guidance,
                                       null_embs=null_embs, text_embeddings=text_embeddings, latents_local=xT, latents_dtype=dtype, guidance_scale=guidance_scale, guidance_stop_step=guidance_stop_step,
                                       callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
 
@@ -394,6 +396,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
         del ddim_res
         del xT
         if use_motion_field:
+            print("using motion field")
             del x0
 
             x_t0_k = x_t0_1[:, :, :1, :, :].repeat(1, 1, video_length-1, 1, 1)
@@ -412,8 +415,8 @@ class TextToVideoPipeline(StableDiffusionPipeline):
                 raise Exception
 
             x_t1 = torch.cat([x_t1_1, x_t1_k], dim=2).clone().detach()
-
-            ddim_res = self.DDIM_backward(frame_ids=frame_ids, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=t1, t0=-1, t1=-1, do_classifier_free_guidance=do_classifier_free_guidance,
+            print(x_t1.shape)
+            ddim_res = self.DDIM_backward(frame_ids=frame_ids, debug_num=2, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=t1, t0=-1, t1=-1, do_classifier_free_guidance=do_classifier_free_guidance,
                                           null_embs=null_embs, text_embeddings=text_embeddings, latents_local=x_t1, latents_dtype=dtype, guidance_scale=guidance_scale,
                                           guidance_stop_step=guidance_stop_step, callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
 
@@ -495,7 +498,7 @@ class TextToVideoPipeline(StableDiffusionPipeline):
             latents = (1-M_BG) * x_t1 + M_BG * (a_convex *
                                                 x_t1 + (1-a_convex) * x_t1_1_fg_masked_moved)
 
-            ddim_res = self.DDIM_backward(frame_ids=frame_ids, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=t1, t0=-1, t1=-1, do_classifier_free_guidance=do_classifier_free_guidance,
+            ddim_res = self.DDIM_backward(frame_ids=frame_ids, debug_num=2, num_inference_steps=num_inference_steps, timesteps=timesteps, skip_t=t1, t0=-1, t1=-1, do_classifier_free_guidance=do_classifier_free_guidance,
                                           null_embs=null_embs, text_embeddings=text_embeddings, latents_local=latents, latents_dtype=dtype, guidance_scale=guidance_scale,
                                           guidance_stop_step=guidance_stop_step, callback=callback, callback_steps=callback_steps, extra_step_kwargs=extra_step_kwargs, num_warmup_steps=num_warmup_steps)
             x0 = ddim_res["x0"].detach()
